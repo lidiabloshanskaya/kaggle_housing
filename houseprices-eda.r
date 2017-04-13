@@ -21,54 +21,14 @@ test <- read.csv('test.csv', stringsAsFactors = FALSE,
 
 #summary(train)
 
+## First let's get the feeling and intuition about the data, 
+##the feature significance and correllation with simple EDA
 
-
-train[1,!sapply(train, is.numeric)]
-nbhd<-unique(train$Neighborhood)
-sum(is.na(train$Neighborhood)) ##no NA in train$Neighborhood
-train$BsmtCond<- as.numeric(as.factor(train$BsmtCond))
-train$BsmtQual<- as.numeric(as.factor(train$BsmtQual))
-summary(train$BsmQualFactor)
-train$BsmtCond[is.na(train$BsmtCond)]<-0
-train$BsmtQual[is.na(train$BsmtQual)]<-0
-
-
-##turns out neighborhood doesn;t influence the price much
-plotSalePrice.vs.x <- function(xval){
-  ggplot(train, aes(x=xval, y=train$SalePrice))+
-  geom_boxplot()+
-  theme(axis.text.x = element_text(angle = 90))
-}##!!!boxplot gives better info than bar- with outliers and quantiles!!!
-
-plotSalePrice.vs.x(as.factor(train$Neighborhood))
-plotSalePrice.vs.x(as.factor(train$BsmtQual))
-
-
-
-####### CORRELATION MATRIX CALCULATION AND GRAPH #############
-
-train$GarageCond <- as.numeric(as.factor(train$GarageCond))
-train$GarageQual <- as.numeric(as.factor(train$GarageQual))
-train$BsmtQual <- as.numeric(as.factor(train$BsmtQual))
-train$BsmtCond <- as.numeric(as.factor(train$BsmtCond))
-train$GarageType <- as.numeric(as.factor(train$GarageType))
-
-
-
+####### CORRELATION MATRIX CALCULATION AND GRAPH #####
 cor.matr<-cor(train[,sapply(train,is.numeric)],use="pairwise.complete.obs")
 cor.matr<-cor.matr %>%
   round(2)%>%
   melt()
-  
-
-#upper triangular matrix
-get_upper_tri <- function(cormat){
-  cormat[lower.tri(cormat)]<- NA
-  return(cormat)
-}
-cor.matr.up<- cor.matr%>%
-  get_upper_tri()%>%
-  melt(na.rm=TRUE)
 
 
 ##analyze predictors
@@ -85,119 +45,120 @@ ggplot(data=cor.matr, aes(x=Var1,y=Var2, fill=value))+
 # dev.off()
 #### end of correlation
 
+##LotFrontage highly correlated with LotArea, LotFrontage looks like more significant variable, 
+#but it has many missing values, we''ll stick to LotArea
+## Looks like we have the set of important features, let's get a closer look at them 
 
-#train$YrBltFactor<-cut(train$YearBuilt,c(1872,1900,1920,1930,1940,1950,1960,1970,1980,1990,2000,2010))
+important.features <- c(#"SaleCondition",
+                        "OpenPorchSF", # ~ WoodDeckSF
+                        "GarageCars",
+                       # "Fireplaces",
+                        "FullBath",
+                        "GrLivArea", # ~Bedroom
+                        "X2ndFlrSF",
+                        "TotalBsmtSF",
+                       # "Foundation",
+                       # "ExterQual",
+                        "YearBuilt",  #YearRemodAdd~
+                        "OverallQual",
+                        "LotArea", 
+                        "LotFrontage")
 
 
+cor.matr.imp<-cor(train[,c(important.features,"SalePrice")],use="pairwise.complete.obs")
+cor.matr.imp<-cor.matr.imp %>%
+  round(2)%>%
+  melt()
+
+##detailed correlation matrix for most important features
+ggplot(data=cor.matr.imp, aes(x=Var1,y=Var2, fill=value))+
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation")+
+  geom_text(aes(label = round(value, 1))) +
+  theme_minimal()+ 
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, 
+                                   size = 12, hjust = 1))+
+  coord_equal()
+
+## Our favourites are "OverallQual", "GarageCars", "FullBath", "LotFrontage", "GrLivArea", "TotalBsmtSF"
+
+### Let's first look at Sale Price and log-transform it to correct skewness
 p1<-ggplot(train, aes(x = SalePrice)) +
-      geom_histogram()
-#p2<-ggplot(train, aes(x = YearBuilt)) +
-#      geom_histogram()
-# p2<-ggplot(train, aes(x = YrBltFactor)) +
-#   geom_bar(aes(fill=as.factor(OverallQual)))
+  geom_histogram()
+p2<-ggplot(train, aes(x = log(SalePrice))) +
+  geom_histogram()
+grid.arrange(p1,p2, ncol=2)
 
-p3<-ggplot(train, aes(x = OverallQual)) +
-      geom_bar()
-p4<-ggplot(train, aes(x = GarageCars)) +
-      geom_bar()
-grid.arrange(p1,p3, p4, ncol=2)
+## Further Exploer Features 
 
-pYB<-ggplot(train, aes(x = as.factor(YearBuilt),#BedroomAbvGr,
+
+
+## SalePrice vs YearBuilt
+pYB<-ggplot(train, aes(x = as.factor(YearBuilt),
                      y=SalePrice))+
-  theme(axis.text.x = element_text(angle = 90))
-
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(legend.position = "bottom")
+pYB1 <- pYB + geom_boxplot()
 ##factor by OverallQual
-pYB + geom_bar(aes(fill=as.factor(OverallQual)),
+pYB2 <- pYB + geom_bar(aes(fill=as.factor(OverallQual)),
            stat="identity",
-           position="dodge")
-  # scale_fill_brewer(name="Number of bedrooms", palette = "Dark2")+
-  # labs(title="Bar plot Sale Price vs Year Sold by number of Bedrooms", x="Year Sold",
-  #      y="Sale Price")
-
-pYB + geom_bar(stat="identity")
-
-pYB + geom_boxplot()
+           position="dodge")+
+  theme(legend.position = "bottom")
+grid.arrange(pYB1,pYB2, ncol=1)
+## newer built houses are more expensive, unless they are really old... and really good
 
 
-
-# #multiple graphs on one page
-# grid.arrange(p1, p2, ncol=1) 
-
-
-## Density graphs
-# d1<-ggplot(train, aes(x=LotArea, color=as.factor(BedroomAbvGr))) +
-#   geom_density()+
-#   scale_x_log10()+
-#   scale_color_discrete(name="Bedrooms")+
-#   ggtitle("Lot area, by bedrooms")
-# 
-# d2<-ggplot(train, aes(x=SalePrice, color=as.factor(BedroomAbvGr))) +
-#   geom_density()+
-#   scale_x_log10()+
-#   scale_color_discrete(name="Bedrooms")+
-#   ggtitle("Sale price, by bedrooms")
-# 
-# grid.arrange(p1, d1, p2, d2, ncol=2) 
-# 
-# 
-# 
-# mm<-ggplot(train, aes(x=LotArea, y=SalePrice))
-# mm+geom_density2d()+
-#   scale_x_log10()+scale_y_log10()
-
-#############################
-
-#Important features
-# train$GarageArea, train$GarageCars, train$FullBath, train$GrLivArea
-# train$TotalBsmtSF, train$TotalBsmtSF, train$OverallQual
-#train$TotRmsAbvGrd
+###pairwise distros - need to check log transform
+suppressWarnings(suppressMessages(library('car')))
+spm(train[, c("SalePrice","OverallQual", "GarageCars", "FullBath", "LotFrontage", "GrLivArea", "TotalBsmtSF")])
 
 
-###MISSING VALUES###
+
+###################################
+#####      MISSING VALUES       #####
+train$isTrain<-TRUE
+test$isTrain<-FALSE
+test$SalePrice<-NA
+testID<-test$Id
+ds<-rbind(train, test)
+
+
 ratio.is.na<-function(dataset){
   col.na<-colMeans(is.na(dataset))
  col.na<-col.na[col.na>0]*100
  col.na
 }
 
-ratio.is.na(train)
-ratio.is.na(test)
-names(which(colSums(is.na(test))>0)) ## names of columns with NA
-## we'll drop all Bsmt* variables apart from TotalBsmtSF (main info) and 
-## BsmtQual that looks correlated to SalePrice. On the other hand: BsmtQual~~BsmtCond,
-## At the same time BsmtFinSF1 is uncorrelated. 
-## BsmtFullBath"  "BsmtHalfBath" seem to be not much correlated
-
-## uncorrelated: X3SsnPorch, BsmtHalfBath, LowQualFinSF, BsmtFinSF2
-
-##Twin variables: GarageArea, GarageCars,  
-##                  X1stFlrSF, TotalBsmtSF
-
-
-train$isTrain<-TRUE
-test$isTrain<-FALSE
-test$SalePrice<-NA
-testID<-test$Id
-ds<-rbind(train, test)
+ratio.is.na(ds)
 ## right away exclude the features with missing values >15%
-drop.fea.15 <-c("Alley", "MiscFeature", "Fence", "FireplaceQu","PoolQC","LotFrontage")
+##but will keep "LotFrontage", since it seems to have high correlation with SalePrice
+
+drop.fea.15 <-c("Alley", "MiscFeature", "Fence", "FireplaceQu","PoolQC")
 ds <- ds[!names(ds) %in% drop.fea.15]
 ratio.is.na(ds)
 
+## Impute the "LotFrontage" as a linear regression from LotArea and GarageArea
+
+ds.LotFrontage <- ds %>% select(LotFrontage, LotArea, GarageArea)
+ds.LotFrontage <- ds.LotFrontage[complete.cases(ds.LotFrontage),]
+
+na.LotFrontage <- data.frame("LotArea" = ds$LotArea[is.na(ds$LotFrontage)],
+                               "GarageArea" = ds$GarageArea[is.na(ds$LotFrontage)] )
+
+lm.LotFrontage <- lm(LotFrontage ~ LotArea + GarageArea, data=ds.LotFrontage)
+ds$LotFrontage[is.na(ds$LotFrontage)] <- predict(lm.LotFrontage, newdata=na.LotFrontage)
+
+sum(is.na(ds$LotFrontage)) ##just chekin'
+
+## Also will drop "GarageArea" now which seems to be twin to GarageCars
+## and "X1stFlrSF" looks like twin of TotalBsmtSF
+## GarageYrBlt is heavily related to YearBuilt 
+
+ds <- ds[!names(ds) %in% c("GarageArea","X1stFlrSF", "GarageYrBlt", "BsmtHalfBath")]
 
 ## Let's work further with missing features
-## There are some twin variables like GarageArea and GarageCars, GarageYrBlt. Let's drop GarageArea
-##X1stFlrSF looks like twin of TotalBsmtSF, let's drop it
-##also let's drop GarageCond, GarageQual (correlated with area, not much with sale price)
-##with this for now i'll drop all other Garage
-## BsmtCond doesn't have too much to say about final price, unlike BsmtQual
-drop.fea <-c("GarageArea", "X1stFlrSF", "GarageYrBlt", "GarageCond", "GarageQual", 
-             "TotRmsAbvGrd", "GarageType","GarageFinish", "BsmtCond",
-             "BsmtFinSF1", "BsmtFinSF2","BsmtFinType2", "BsmtFinType1", 
-             "BsmtHalfBath", "MasVnrArea", "MasVnrType", "BsmtUnfSF")
-ds <- ds[!names(ds) %in% drop.fea]
-ds$GarageCars[is.na(ds$GarageCars)]<-0
-
 
 ## features that are character and are missing
 colnames(ds[,sapply(ds,is.character) & colSums(is.na(ds))>0])
@@ -209,9 +170,10 @@ ds$BsmtExposure[is.na(ds$BsmtExposure)] <- "NONE"
 ds$BsmtExposure <- as.factor(ds$BsmtExposure)
 ds$BsmtFullBath[is.na(ds$BsmtFullBath)] <- 0
 ds$BsmtFullBath <- as.factor(ds$BsmtFullBath)
+ds$GarageCars[is.na(ds$GarageCars)]<-0
+ds$TotalBsmtSF[is.na(ds$TotalBsmtSF)] <- 0
 
-
-colSums(is.na(ds)>0)
+#colSums(is.na(ds)>0)
 
 ##what's with kitchen and utilities
 sum(is.na(ds$KitchenQual))
@@ -221,8 +183,8 @@ ds$KitchenQual <- as.factor(ds$KitchenQual)
 
 sum(is.na(ds$Utilities))
 ds$Neighborhood[is.na(ds$Utilities)] ##"IDOTRR"  "Gilbert"
-ds$Utilities[ds$Neighborhood=="IDOTRR"] ##AllPub
-ds$Utilities[ds$Neighborhood=="Gilbert"]
+# ds$Utilities[ds$Neighborhood=="IDOTRR"] ##AllPub
+# ds$Utilities[ds$Neighborhood=="Gilbert"]
 ds$Utilities[is.na(ds$Utilities)] <- "AllPub"
 ds$Utilities <- as.factor(ds$Utilities)
 
@@ -245,11 +207,25 @@ ds$Functional[is.na(ds$Functional)] <- "Typ"
 
 summary(as.factor(ds$MSZoning)) ## majority "RL"
 ds$MSZoning[is.na(ds$MSZoning)] <- "RL"
+ds$BsmtFinType1[is.na(ds$BsmtFinType1)] <- "Unf"
+ds$BsmtFinType2[is.na(ds$BsmtFinType2)] <- "Unf"
+ds$MasVnrType[is.na(ds$MasVnrType)] <- "NONE"
+ds$MasVnrArea[is.na(ds$MasVnrArea)] <- 0
 
-# ds$YearBuilt <- anydate(ds$YearBuilt)
-# ds$YrSold <- anydate(ds$YrSold)
-# ds$YearRemodAdd <- anydate(ds$YearRemodAdd)
-# ds$GarageYrBlt <- anydate(ds$GarageYrBlt)
+ds$BsmtQual[is.na(ds$BsmtQual)] <- "TA"
+ds$BsmtCond[is.na(ds$BsmtCond)] <- "TA"
+ds$BsmtFinSF1[is.na(ds$BsmtFinSF1)] <- 0
+ds$BsmtFinSF2[is.na(ds$BsmtFinSF2)] <- 0
+ds$GarageQual[is.na(ds$GarageQual)] <- "NONE"
+ds$GarageCond[is.na(ds$GarageCond)] <- "NONE"
+ds$GarageType[is.na(ds$GarageType)] <- "NONE"
+ds$GarageFinish[is.na(ds$GarageFinish)] <- "NONE"
+ds$BsmtUnfSF[is.na(ds$BsmtUnfSF)] <- 0
+
+
+ratio.is.na(ds) ##checkin' all's good
+
+
 
 train <- ds %>% filter(isTrain == T)
 test <- ds %>% filter(isTrain == F)
@@ -258,50 +234,63 @@ test$SalePrice <- NULL
 train$isTrain <- NULL
 test$isTrain <- NULL
 
-sum(is.na(train))
-sum(is.na(test))
+
+#########      OUTLIERS      #########
+
+
+##Outliers in data can distort predictions and affect the accuracy, 
+##if we don’t detect and handle them appropriately especially in regression models.
+## * Extreme Value Analysis - univariate,  scatterplots, histograms and box and whisker plots
+## * Proximity Methods - clustering, k-means
+## * Projection Methods - PCA etc.
+## * Multivariate - Cook's distance http://r-statistics.co/Outlier-Treatment-With-R.html
+
+## ok, let's go back to my scatterplots and boxplots and kick those outliers
+## SalePrice vs OverallQual - discrete
+pQual<-ggplot(train, aes(x = as.factor(OverallQual), y=SalePrice))+
+  geom_boxplot()
+## SalePrice vs GrLivArea - contininuous
+pLivAr<-ggplot(train, aes(x = GrLivArea,y=SalePrice)) +
+  geom_point()
+## SalePrice vs LotArea - contininuous
+pLotAr<-ggplot(train, aes(x = LotArea, y=SalePrice))+
+  geom_point()
+pBsmSF<-ggplot(train, aes(x = TotalBsmtSF,y=SalePrice))+
+  geom_point()
+grid.arrange(pQual,pLivAr, pLotAr, pBsmSF, ncol=2)
+
+## we already can see the outliers
+outliers.GrLivArea<-train$Id[train$GrLivArea > 4000 & train$SalePrice < 200000 ]##those two on the bottom
+outliers.GrLivArea
+#[1]  524 1299
+train$TotalBsmtSF[train$Id==1299] # also takes care of that Basement weirdo
+## removing those two rows:
+train<-train[-outliers.GrLivArea,]
+
+## checking other stuff:
+# suppressWarnings(suppressMessages(library('outliers')))
+# set.seed(42)
+# outlier(train$SalePrice)
 
 
 
 
+## but i also want to try Cook's distance
+## * Multivariate - Cook's distance http://r-statistics.co/Outlier-Treatment-With-R.html
+#scaled.SalePrice <- scale(train$SalePrice) ## standardized data
+lmod <- lm(SalePrice ~ ., data=train)
+cooksd <- cooks.distance(lmod)
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
+#text(x=1:length(cooksd)+1, y=cooksd, 
+ #    labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red") 
+car::outlierTest(lmod)
 
 
 
 
-##########################################################
+## LotArea also looks fishy, but it doesn't look like outliers, 
+## just few observations with large LotArea. On top of that the 
+## SalePrice doesn't depend that heavily on LotArea, so will let it be
+## And now for....
 
-
-# 
-# ## now lets do some analysis, so far something stupid
-# ## try regression, random forests and gradient boosting
-# 
-# lr.model<-train(SalePrice ~ LotArea+BedroomAbvGr,
-#                 data=train_sh,
-#                 method = "lm"
-# )
-# summary(lr.model)
-# 
-# ggplot(train_sh, aes(x=LotArea, y=SalePrice)) +
-#   geom_point(aes(color=as.factor(BedroomAbvGr)))+
-#   scale_color_brewer(name="Number of bedrooms", palette = "Dark2")+
-#   geom_smooth(method='lm')+
-#   scale_x_log10()
-# 
-# 
-# preProc<-preProcess(train_sh[,5:6], method = c("scale"))
-# train_pp<-predict(preProc,train_sh[,5:6])
-# head(train_sh)
-# 
-# train_new<-select(train_sh,1:4)
-# train_new<-bind_cols(train_new,train_pp)
-# head(train_new)
-# 
-# lr.model.bd<-train(SalePrice ~ LotArea+BedroomAbvGr+MoSold+YrSold,
-#                 data=train_new,
-#                 method = "lm"
-# )
-# summary(lr.model.bd)
-# res<-residuals(lr.model.bd)
-# predicted<-predict(lr.model.bd)
-# plot(train_sh$SalePrice,predicted)
-# plot(train_sh$SalePrice,res)
